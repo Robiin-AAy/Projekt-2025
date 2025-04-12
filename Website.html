@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aktienübersicht</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+    .sidebar {
+      flex: 1;
+      min-width: 250px;
+      max-width: 300px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .content {
+      flex: 2;
+      min-width: 300px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      margin-top: 0;
+    }
+    .stock-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .stock-item:hover {
+      background: #e7e7e7;
+    }
+    .stock-item img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+    }
+    #chartCanvas {
+      width: 100%;
+      height: 300px;
+      background: #fafafa;
+      border: 1px solid #ccc;
+    }
+    .info-box {
+      margin-top: 15px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="sidebar">
+      <h2>Wähle eine Aktie</h2>
+      <div class="stock-item" onclick="loadStock('AAPL')">
+        <img src="https://logo.clearbit.com/apple.com" alt="Apple" /> Apple
+      </div>
+      <div class="stock-item" onclick="loadStock('MSFT')">
+        <img src="https://logo.clearbit.com/microsoft.com" alt="Microsoft" /> Microsoft
+      </div>
+      <div class="stock-item" onclick="loadStock('GOOGL')">
+        <img src="https://logo.clearbit.com/google.com" alt="Google" /> Google
+      </div>
+      <div class="stock-item" onclick="loadStock('TSLA')">
+        <img src="https://logo.clearbit.com/tesla.com" alt="Tesla" /> Tesla
+      </div>
+    </div>
+    <div class="content">
+      <h2 id="stock-name">Bitte wähle eine Aktie</h2>
+      <canvas id="chartCanvas"></canvas>
+      <div class="info-box" id="stock-info"></div>
+      <button onclick="refreshStock()">Aktualisieren</button>
+      <div style="margin-top: 20px; font-size: 14px;">
+        Du möchtest investieren? Diese Aktie könnte über bekannte Broker wie Trade Republic, Scalable Capital oder eToro gekauft werden.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentSymbol = '';
+    let currentName = '';
+
+    async function loadStock(symbol) {
+      currentSymbol = symbol;
+      document.getElementById("stock-name").textContent = `Lade Daten für ${symbol}...`;
+
+      const apiKey = '2a48b1491a334e29abe4a31d8c2867f6';
+      const url = `https://api.twelvedata.com/time_series?symbol=${symbol}&interval=1h&outputsize=30&apikey=${apiKey}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.values) throw new Error('Keine Daten verfügbar.');
+
+        const prices = data.values.reverse().map(v => parseFloat(v.close));
+        const times = data.values.map(v => v.datetime.split(" ")[1]);
+
+        currentName = data.meta.name || symbol;
+        document.getElementById("stock-name").textContent = `${currentName} (${symbol})`;
+
+        drawChart(prices, times);
+
+        document.getElementById("stock-info").innerHTML = `
+          <strong>Preis:</strong> ${prices[prices.length - 1]} USD<br>
+          <strong>Hoch:</strong> ${Math.max(...prices)} USD<br>
+          <strong>Tief:</strong> ${Math.min(...prices)} USD
+        `;
+      } catch (error) {
+        document.getElementById("stock-name").textContent = `Fehler beim Laden`;
+        document.getElementById("stock-info").textContent = error.message;
+      }
+    }
+
+    function refreshStock() {
+      if (currentSymbol) {
+        loadStock(currentSymbol);
+      }
+    }
+
+    function drawChart(data, labels) {
+      const canvas = document.getElementById("chartCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const padding = 40;
+      const width = canvas.width - padding * 2;
+      const height = canvas.height - padding * 2;
+      const min = Math.min(...data);
+      const max = Math.max(...data);
+      const stepX = width / (data.length - 1);
+      const scaleY = height / (max - min);
+
+      // Achsen
+      ctx.beginPath();
+      ctx.strokeStyle = '#ccc';
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, canvas.height - padding);
+      ctx.lineTo(canvas.width - padding, canvas.height - padding);
+      ctx.stroke();
+
+      // Werte einzeichnen
+      ctx.beginPath();
+      ctx.strokeStyle = '#007bff';
+      ctx.lineWidth = 2;
+
+      data.forEach((val, i) => {
+        const x = padding + i * stepX;
+        const y = canvas.height - padding - (val - min) * scaleY;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.stroke();
+
+      // Y-Achsen-Beschriftung
+      ctx.fillStyle = "#333";
+      ctx.font = "12px Arial";
+      for (let i = 0; i <= 5; i++) {
+        const price = min + (max - min) * (i / 5);
+        const y = canvas.height - padding - (price - min) * scaleY;
+        ctx.fillText(price.toFixed(2), 5, y);
+      }
+
+      // X-Achsen-Zeit
+      for (let i = 0; i < labels.length; i += Math.floor(labels.length / 4)) {
+        const x = padding + i * stepX;
+        ctx.fillText(labels[i], x, canvas.height - 5);
+      }
+    }
+  </script>
+</body>
+</html>
